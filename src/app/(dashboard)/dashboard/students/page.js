@@ -1,7 +1,9 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
 import api from '@/lib/api';
-import { FiSearch, FiX, FiDownload } from 'react-icons/fi';
+import Cookies from 'js-cookie';
+import { FiSearch, FiX, FiDownload, FiTrash2 } from 'react-icons/fi';
+import toast from 'react-hot-toast';
 
 export default function StudentsPage() {
   const [students, setStudents] = useState([]);
@@ -26,12 +28,23 @@ export default function StudentsPage() {
   useEffect(() => { api.get('/schools', { params: { limit: 200 } }).then(r => setSchools(r.data.data.schools)); }, []);
 
   const exportExcel = () => {
-    const params = new URLSearchParams({ schoolId, class: cls });
+    const params = new URLSearchParams({ schoolId, class: cls, token: Cookies.get('admin_token') || '' });
     window.open(`${process.env.NEXT_PUBLIC_API_URL}/export/excel?${params}`, '_blank');
   };
   const exportPDF = () => {
-    const params = new URLSearchParams({ schoolId, class: cls });
+    const params = new URLSearchParams({ schoolId, class: cls, token: Cookies.get('admin_token') || '' });
     window.open(`${process.env.NEXT_PUBLIC_API_URL}/export/pdf-list?${params}`, '_blank');
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm('Are you sure you want to delete this student?')) return;
+    try {
+      await api.delete(`/students/${id}`);
+      toast.success('Student deleted successfully');
+      load();
+    } catch (e) {
+      toast.error('Failed to delete student');
+    }
   };
 
   const totalPages = Math.ceil(total / 20);
@@ -70,7 +83,7 @@ export default function StudentsPage() {
       <div className="table-wrapper">
         <table>
           <thead><tr>
-            <th>Student</th><th>ID</th><th>Class</th><th>Father</th><th>Mobile</th><th>Blood</th><th>School</th>
+            <th>Student</th><th>ID</th><th>Class</th><th>Father</th><th>Mobile</th><th>Blood</th><th>School</th><th>Actions</th>
           </tr></thead>
           <tbody>
             {loading ? (
@@ -97,6 +110,11 @@ export default function StudentsPage() {
                 <td style={{ fontSize:13 }}>{s.mobile || '—'}</td>
                 <td>{s.bloodGroup ? <span className="badge badge-red">{s.bloodGroup}</span> : '—'}</td>
                 <td style={{ fontSize:12, color:'var(--text-muted)' }}>{s.schoolId?.slice(0,8)}…</td>
+                <td>
+                  <button onClick={() => handleDelete(s.id)} style={{ background:'none', border:'none', color:'#ef4444', cursor:'pointer', padding:5 }}>
+                    <FiTrash2 size={16} />
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>

@@ -10,6 +10,7 @@ import {
 const NAV = [
   { section: 'MAIN', items: [
     { href: '/dashboard', label: 'Dashboard', icon: FiHome },
+    { href: '/dashboard/subadmins', label: 'Shop Owners', icon: FiUsers, superOnly: true },
     { href: '/dashboard/schools', label: 'Schools', icon: FiBook },
     { href: '/dashboard/activation-keys', label: 'Activation Keys', icon: FiKey },
     { href: '/dashboard/students', label: 'Students', icon: FiUsers },
@@ -28,20 +29,25 @@ export default function Sidebar() {
   const pathname = usePathname();
   const { admin, logout } = useAuth();
 
+  const filteredNav = NAV.map(section => ({
+    ...section,
+    items: section.items.filter(item => !item.superOnly || admin?.role === 'SUPER_ADMIN')
+  }));
+
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
         <div className="sidebar-logo-icon">ID</div>
         <div>
           <div className="sidebar-logo-text">IDCard<span>Pro</span></div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Admin Panel</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{admin?.role === 'SUPER_ADMIN' ? 'Super Admin' : 'Shop Admin'}</div>
         </div>
       </div>
 
       <nav className="sidebar-nav">
-        {NAV.map(({ section, items }) => (
+        {filteredNav.map(({ section, items }) => (
           <div key={section}>
-            <div className="nav-section-label">{section}</div>
+            {items.length > 0 && <div className="nav-section-label">{section}</div>}
             {items.map(({ href, label, icon: Icon }) => (
               <Link key={href} href={href}
                 className={`nav-item ${pathname === href || (href !== '/dashboard' && pathname.startsWith(href)) ? 'active' : ''}`}>

@@ -2,11 +2,14 @@
 import { useEffect, useState, useCallback } from 'react';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
-import { FiPlus, FiEdit2, FiTrash2, FiKey, FiSearch, FiX, FiUpload, FiCheck } from 'react-icons/fi';
+import { FiPlus, FiEdit2, FiTrash2, FiKey, FiSearch, FiX, FiUpload, FiCheck, FiLayout } from 'react-icons/fi';
+import { useAuth } from '@/context/AuthContext';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL?.replace('/api', '') || 'http://localhost:5000';
 const EMPTY = { name:'', address:'', city:'', state:'', phone:'', email:'', primaryColor:'#1E40AF', accentColor:'#F59E0B', principalName:'' };
 
 export default function SchoolsPage() {
+  const { admin } = useAuth();
   const [schools, setSchools] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -25,14 +28,21 @@ export default function SchoolsPage() {
   const [sigPreview, setSigPreview] = useState(null);
   const [editingSchool, setEditingSchool] = useState(null);
 
+  const [subadmins, setSubadmins] = useState([]);
+  
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const r = await api.get('/schools', { params: { page, limit: 15, search } });
       setSchools(r.data.data.schools);
       setTotal(r.data.data.total);
+      
+      if (admin?.role === 'SUPER_ADMIN') {
+        const sr = await api.get('/subadmins');
+        setSubadmins(sr.data.data);
+      }
     } finally { setLoading(false); }
-  }, [page, search]);
+  }, [page, search, admin?.role]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -107,7 +117,24 @@ export default function SchoolsPage() {
     } finally { setGeneratingKey(false); }
   };
 
-  const copyKey = (key) => { navigator.clipboard.writeText(key); toast.success('Copied!'); };
+  const [allTemplates, setAllTemplates] = useState([]);
+  const [templateSchool, setTemplateSchool] = useState(null);
+
+  const openTemplateModal = async (s) => {
+    setTemplateSchool(s);
+    setModal('template-select');
+    const r = await api.get('/templates', { params: { adminId: s.adminId } });
+    setAllTemplates(r.data.data);
+  };
+
+  const selectTemplate = async (tplId) => {
+    try {
+      await api.put(`/schools/${templateSchool.id}/template`, { templateId: tplId });
+      toast.success('Template updated!');
+      setModal(null); load();
+    } catch (e) { toast.error('Error updating template'); }
+  };
+
   const totalPages = Math.ceil(total / 15);
 
   return (
@@ -134,14 +161,16 @@ export default function SchoolsPage() {
       <div className="table-wrapper">
         <table>
           <thead><tr>
-            <th>School</th><th>Location</th><th>Principal</th>
-            <th>Students</th><th>Keys</th><th>Status</th><th>Actions</th>
+            <th>School</th>
+            {admin?.role === 'SUPER_ADMIN' && <th>Shop Owner</th>}
+            <th>Location</th><th>Template</th>
+            <th>Students</th><th>Keys</th><th>Actions</th>
           </tr></thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} style={{ textAlign:'center', padding:40 }}><div className="spinner" /></td></tr>
+              <tr><td colSpan={admin?.role === 'SUPER_ADMIN' ? 7 : 6} style={{ textAlign:'center', padding:40 }}><div className="spinner" /></td></tr>
             ) : schools.length === 0 ? (
-              <tr><td colSpan={7}>
+              <tr><td colSpan={admin?.role === 'SUPER_ADMIN' ? 7 : 6}>
                 <div className="empty-state">
                   <div className="empty-state-icon">🏫</div>
                   <h3>No schools yet</h3>
@@ -163,16 +192,33 @@ export default function SchoolsPage() {
                     </div>
                   </div>
                 </td>
+                {admin?.role === 'SUPER_ADMIN' && (
+                  <td style={{ fontSize:13 }}>
+                    <div className="font-medium">{s.admin?.name || 'Super Admin'}</div>
+                    <div className="text-muted text-[10px]">{s.admin?.email}</div>
+                  </td>
+                )}
                 <td style={{ color:'var(--text-secondary)', fontSize:13 }}>{[s.city, s.state].filter(Boolean).join(', ') || '—'}</td>
-                <td style={{ fontSize:13 }}>
-                  <div>{s.principalName || <span style={{color:'var(--text-muted)'}}>—</span>}</div>
-                  {s.principalSignatureUrl && <span style={{fontSize:11,color:'var(--accent-green)'}}>✓ Signature</span>}
+                <td>
+                  {s.selectedTemplate ? (
+                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                       <div style={{ width:32, height:20, borderRadius:4, overflow:'hidden', background:'#1a1a2e', flexShrink:0 }}>
+                          {s.selectedTemplate.imageUrl && <img src={`${API_URL}${s.selectedTemplate.imageUrl}`} style={{ width:'100%', height:'100%', objectFit:'cover' }} alt="" />}
+                       </div>
+                       <div>
+                         <div style={{ fontSize:12, fontWeight:600 }}>{s.selectedTemplate.name}</div>
+                         {s.templateNote && <div style={{ fontSize:10, color:'var(--accent-orange)', marginTop:2 }}>📝 {s.templateNote}</div>}
+                       </div>
+                    </div>
+                  ) : (
+                    <span style={{ fontSize:12, color:'var(--text-muted)' }}>No template</span>
+                  )}
                 </td>
                 <td><span className="badge badge-blue">{s._count?.students ?? 0}</span></td>
                 <td><span className="badge badge-purple">{s._count?.activationKeys ?? 0}</span></td>
-                <td><span className={`badge ${s.isActive ? 'badge-green' : 'badge-red'}`}>{s.isActive ? 'Active' : 'Inactive'}</span></td>
                 <td>
                   <div style={{ display:'flex', gap:6 }}>
+                    <button className="btn btn-secondary btn-sm btn-icon" onClick={() => openTemplateModal(s)} title="Set Template"><FiLayout size={13}/></button>
                     <button className="btn btn-secondary btn-sm btn-icon" onClick={() => openKeys(s)} title="Keys"><FiKey size={13}/></button>
                     <button className="btn btn-secondary btn-sm btn-icon" onClick={() => openEdit(s)} title="Edit"><FiEdit2 size={13}/></button>
                     <button className="btn btn-danger btn-sm btn-icon" onClick={() => handleDelete(s.id)} title="Delete"><FiTrash2 size={13}/></button>
@@ -228,6 +274,16 @@ export default function SchoolsPage() {
                     <label className="form-label">State</label>
                     <input className="form-input" value={form.state} onChange={e=>setForm(f=>({...f,state:e.target.value}))} placeholder="Maharashtra"/>
                   </div>
+                  {admin?.role === 'SUPER_ADMIN' && (
+                    <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                      <label className="form-label">Assign to Shop Owner (Sub Admin) *</label>
+                      <select className="form-select" value={form.adminId} onChange={e=>setForm(f=>({...f,adminId:e.target.value}))}>
+                         <option value="">-- Select Shop Owner --</option>
+                         <option value={admin.id}>Directly Under Me (Super Admin)</option>
+                         {subadmins.map(sa => <option key={sa.id} value={sa.id}>{sa.name} ({sa.email})</option>)}
+                      </select>
+                    </div>
+                  )}
                   <div className="form-group" style={{ gridColumn: '1 / -1' }}>
                     <label className="form-label">Address</label>
                     <textarea className="form-textarea" value={form.address} onChange={e=>setForm(f=>({...f,address:e.target.value}))} placeholder="Full school address..." rows={2}/>
@@ -328,6 +384,39 @@ export default function SchoolsPage() {
                 </div>
               ))
             }
+          </div>
+        </div>
+      )}
+      {/* Template Select Modal */}
+      {modal === 'template-select' && (
+        <div className="modal-overlay" onClick={e => e.target===e.currentTarget && setModal(null)}>
+          <div className="modal modal-lg">
+            <div className="modal-header">
+              <div className="modal-title">Select Template for {templateSchool?.name}</div>
+              <button className="modal-close" onClick={() => setModal(null)}>✕</button>
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(180px, 1fr))', gap:16, padding: '0 4px' }}>
+              {allTemplates.map(tpl => (
+                <div key={tpl.id} 
+                  className={`card card-sm cursor-pointer border-2 transition-all ${templateSchool.selectedTemplateId === tpl.id ? 'border-accent-blue bg-accent-blue/5' : 'hover:border-slate-500'}`}
+                  onClick={() => selectTemplate(tpl.id)}
+                >
+                  <div className="aspect-[3.375/2.125] bg-slate-800 rounded mb-2 overflow-hidden">
+                    {tpl.imageUrl && <img src={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000'}${tpl.imageUrl}`} className="w-full h-full object-cover" />}
+                  </div>
+                  <div className="text-xs font-bold text-center">{tpl.name}</div>
+                  {templateSchool.selectedTemplateId === tpl.id && <div className="text-[10px] text-accent-blue text-center mt-1 font-bold">CURRENTLY SELECTED</div>}
+                </div>
+              ))}
+              {allTemplates.length === 0 && (
+                <div className="col-span-full p-12 text-center text-muted">
+                  No templates found for this shop owner. Please upload templates first.
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setModal(null)}>Cancel</button>
+            </div>
           </div>
         </div>
       )}
