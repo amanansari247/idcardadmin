@@ -644,7 +644,7 @@ export default function TemplatesPage() {
               <div key={tpl.id} className="card card-sm" style={{ overflow: 'hidden', padding: 0 }}>
                 <div style={{ aspectRatio: String(ratio), background: '#1a1a2e', position: 'relative', overflow: 'hidden' }}>
                   {tpl.imageUrl ? (
-                    <img src={`${NEXT_PUBLIC_UPLOADS_URL}${tpl.imageUrl}`} alt={tpl.name}
+                    <img src={`${API_URL}${tpl.imageUrl}`} alt={tpl.name}
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
                     <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
